@@ -1,0 +1,6 @@
+pymupdf
+langchain-text-splitters
+python-dotenv
+google-generativeai
+chromadb
+streamlit>=1.30.0
