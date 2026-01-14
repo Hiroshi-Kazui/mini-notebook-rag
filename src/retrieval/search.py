@@ -11,19 +11,27 @@ if sys.platform == "win32":
 
 load_dotenv()
 
-def semantic_search(query: str, storage_path: str = "storage/chroma", top_k: int = 3) -> List[Dict]:
+# 設定のインポート
+from src.config import settings
+
+def semantic_search(query: str, storage_path: str = None, top_k: int = None) -> List[Dict]:
     """
     ベクトル検索を実行し、結果を辞書のリストとして返す
 
     Args:
         query: 検索クエリ
-        storage_path: ChromaDBの保存パス
-        top_k: 取得する結果の件数
+        storage_path: ChromaDBの保存パス（Noneの場合は設定から取得）
+        top_k: 取得する結果の件数（Noneの場合は設定から取得）
 
     Returns:
         検索結果のリスト（各要素は content, metadata, distance を含む辞書）
     """
-    api_key = os.getenv("GOOGLE_API_KEY")
+    if storage_path is None:
+        storage_path = settings.storage.chroma_path
+    if top_k is None:
+        top_k = settings.retrieval.default_top_k
+    
+    api_key = settings.embedding.api_key
     if not api_key:
         raise ValueError("GOOGLE_API_KEY not found in .env file.")
 
@@ -33,11 +41,11 @@ def semantic_search(query: str, storage_path: str = "storage/chroma", top_k: int
     # Google Gemini Embedding関数
     gemini_ef = embedding_functions.GoogleGenerativeAiEmbeddingFunction(
         api_key=api_key,
-        model_name="models/text-embedding-004",
-        task_type="RETRIEVAL_QUERY"
+        model_name=settings.embedding.model,
+        task_type=settings.embedding.task_type_query
     )
 
-    collection_name = "notebook_rag_collection"
+    collection_name = settings.storage.collection_name
     collection = client.get_collection(
         name=collection_name,
         embedding_function=gemini_ef

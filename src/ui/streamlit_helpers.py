@@ -17,6 +17,7 @@ from src.retrieval.search import semantic_search
 from src.retrieval.reranker import rerank_with_llm
 from src.utils.logger import setup_logger
 from src.utils.error_handler import handle_errors, APIRetryHandler, get_user_friendly_error_message
+from src.types import ProcessResult, GenerateAnswerResult, DBStatus, MultiplePDFProcessResult, ClearDatabaseResult
 
 load_dotenv()
 
@@ -30,7 +31,7 @@ retry_handler = APIRetryHandler(max_retries=3, backoff_factor=2.0)
 @handle_errors(logger)
 def process_uploaded_pdf(uploaded_file, raw_dir: str = "data/raw",
                         processed_dir: str = "data/processed",
-                        storage_path: str = "storage/chroma") -> Dict[str, any]:
+                        storage_path: str = "storage/chroma") -> ProcessResult:
     """
     アップロードされたPDFを処理: 保存 -> 抽出 -> チャンク化 -> 埋め込み
 
@@ -111,7 +112,7 @@ def process_uploaded_pdf(uploaded_file, raw_dir: str = "data/raw",
 
 @handle_errors(logger)
 def generate_answer_ui(query: str, storage_path: str = "storage/chroma",
-                      n_results: int = 3, initial_k: int = 100, final_k: int = 20) -> Dict[str, any]:
+                      n_results: int = 3, initial_k: int = 100, final_k: int = 20) -> GenerateAnswerResult:
     """
     RAGパイプラインでクエリに対する回答を生成（UI用）
 
@@ -270,7 +271,7 @@ def clear_chat_history(session_state) -> None:
         session_state.messages = []
 
 
-def check_db_status(storage_path: str = "storage/chroma") -> Dict[str, any]:
+def check_db_status(storage_path: str = "storage/chroma") -> DBStatus:
     """
     ChromaDBのステータスを確認
 
@@ -328,7 +329,7 @@ def check_db_status(storage_path: str = "storage/chroma") -> Dict[str, any]:
         }
 
 
-def clear_database(storage_path: str = "storage/chroma") -> Dict[str, any]:
+def clear_database(storage_path: str = "storage/chroma") -> ClearDatabaseResult:
     """
     データベースをクリア
 
@@ -379,7 +380,7 @@ powershell -ExecutionPolicy Bypass -File .\\cleanup_and_restart.ps1
 
 def process_multiple_pdfs(uploaded_files: List, raw_dir: str = "data/raw",
                          processed_dir: str = "data/processed",
-                         storage_path: str = "storage/chroma") -> Dict[str, any]:
+                         storage_path: str = "storage/chroma") -> MultiplePDFProcessResult:
     """
     複数のPDFファイルを一括処理
 

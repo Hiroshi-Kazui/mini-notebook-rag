@@ -13,11 +13,21 @@ if sys.platform == "win32":
 
 load_dotenv()
 
-def store_embeddings(processed_file: str, storage_path: str):
+# 設定のインポート
+from src.config import settings
+
+def store_embeddings(processed_file: str, storage_path: str = None):
     """
     JSONデータからテキストを読み込み、Google Geminiでベクトル化してChromaDBに保存します。
+    
+    Args:
+        processed_file: 処理済みJSONファイルのパス
+        storage_path: ChromaDBの保存パス（Noneの場合は設定から取得）
     """
-    api_key = os.getenv("GOOGLE_API_KEY")
+    if storage_path is None:
+        storage_path = settings.storage.chroma_path
+    
+    api_key = settings.embedding.api_key
     if not api_key:
         raise ValueError("GOOGLE_API_KEY not found in .env file.")
 
@@ -33,12 +43,12 @@ def store_embeddings(processed_file: str, storage_path: str):
     # Google Gemini Embedding関数
     gemini_ef = embedding_functions.GoogleGenerativeAiEmbeddingFunction(
         api_key=api_key,
-        model_name="models/text-embedding-004",
-        task_type="RETRIEVAL_DOCUMENT"
+        model_name=settings.embedding.model,
+        task_type=settings.embedding.task_type_document
     )
 
     # コレクション（テーブルのようなもの）の作成または取得
-    collection_name = "notebook_rag_collection"
+    collection_name = settings.storage.collection_name
     collection = client.get_or_create_collection(
         name=collection_name,
         embedding_function=gemini_ef,
