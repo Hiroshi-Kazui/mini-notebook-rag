@@ -1,0 +1,51 @@
+services:
+  streamlit:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: mini-notebook-rag-app
+    ports:
+      - "8501:8501"
+    volumes:
+      - pdf-raw:/app/data/raw
+      - pdf-processed:/app/data/processed
+      - chroma-storage:/app/storage/chroma
+      - chat-history:/app/storage
+      - app-logs:/app/logs
+    env_file:
+      - .env
+    environment:
+      - PDF_SERVER_BASE_URL=http://localhost:80
+    networks:
+      - rag-network
+    depends_on:
+      - nginx
+    restart: unless-stopped
+
+  nginx:
+    image: nginx:alpine
+    container_name: mini-notebook-rag-nginx
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - pdf-raw:/usr/share/nginx/html:ro
+    networks:
+      - rag-network
+    restart: unless-stopped
+
+volumes:
+  pdf-raw:
+    name: mini-notebook-rag-pdf-raw
+  pdf-processed:
+    name: mini-notebook-rag-pdf-processed
+  chroma-storage:
+    name: mini-notebook-rag-chroma
+  chat-history:
+    name: mini-notebook-rag-chat-history
+  app-logs:
+    name: mini-notebook-rag-logs
+
+networks:
+  rag-network:
+    name: mini-notebook-rag-network

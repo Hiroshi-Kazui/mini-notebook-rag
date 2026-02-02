@@ -57,14 +57,13 @@ class StorageSettings:
         self.chat_history_path: str = os.getenv("CHAT_HISTORY_PATH", "storage/chat_history.json")
         self.data_raw_dir: str = os.getenv("DATA_RAW_DIR", "data/raw")
         self.data_processed_dir: str = os.getenv("DATA_PROCESSED_DIR", "data/processed")
-        self.static_dir: str = os.getenv("STATIC_DIR", "static")
-        
+        self.pdf_server_base_url: str = os.getenv("PDF_SERVER_BASE_URL", "http://localhost:80")
+
         # ディレクトリの作成
         Path(self.chroma_path).mkdir(parents=True, exist_ok=True)
         Path(self.chat_history_path).parent.mkdir(parents=True, exist_ok=True)
         Path(self.data_raw_dir).mkdir(parents=True, exist_ok=True)
         Path(self.data_processed_dir).mkdir(parents=True, exist_ok=True)
-        Path(self.static_dir).mkdir(parents=True, exist_ok=True)
 
 
 class Settings:
@@ -85,7 +84,6 @@ class Settings:
         Path(self.storage.chat_history_path).parent.mkdir(parents=True, exist_ok=True)
         Path(self.storage.data_raw_dir).mkdir(parents=True, exist_ok=True)
         Path(self.storage.data_processed_dir).mkdir(parents=True, exist_ok=True)
-        Path(self.storage.static_dir).mkdir(parents=True, exist_ok=True)
 
 
 # グローバル設定インスタンス

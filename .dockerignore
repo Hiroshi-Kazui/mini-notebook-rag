@@ -1,0 +1,37 @@
+.git
+.gitignore
+.env
+.claude/
+.cursorrules
+.vscode/
+__pycache__
+*.pyc
+*.pyo
+*.egg-info
+.pytest_cache
+.mypy_cache
+.ruff_cache
+
+# Runtime data (managed by Docker volumes)
+logs/
+storage/
+data/raw/
+data/processed/
+static/
+
+# Documentation (not needed at runtime)
+RAG_ANALYSIS_REPORT.md
+README.md
+LICENSE
+
+# Obsolete files
+serve_pdfs.py
+start_all.ps1
+cleanup_and_restart.ps1
+debug_search.py
+test_reranking.py
+
+# Temp files
+nul
+tmp*-cwd
+*.tmp

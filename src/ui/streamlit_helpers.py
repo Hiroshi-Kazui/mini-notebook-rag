@@ -18,6 +18,7 @@ from src.retrieval.reranker import rerank_with_llm
 from src.utils.logger import setup_logger
 from src.utils.error_handler import handle_errors, APIRetryHandler, get_user_friendly_error_message
 from src.types import ProcessResult, GenerateAnswerResult, DBStatus, MultiplePDFProcessResult, ClearDatabaseResult
+from src.config.settings import settings
 
 load_dotenv()
 
@@ -54,16 +55,10 @@ def process_uploaded_pdf(uploaded_file, raw_dir: str = "data/raw",
 
         # 1. PDFを保存
         os.makedirs(raw_dir, exist_ok=True)
-        os.makedirs("static", exist_ok=True)
         pdf_path = os.path.join(raw_dir, uploaded_file.name)
-        static_pdf_path = os.path.join("static", uploaded_file.name)
-        
+
         logger.debug(f"PDFを保存: {pdf_path}")
         with open(pdf_path, "wb") as f:
-            f.write(uploaded_file.getbuffer())
-        
-        # staticフォルダにも保存（ブラウザ閲覧用）
-        with open(static_pdf_path, "wb") as f:
             f.write(uploaded_file.getbuffer())
 
         # 2. テキスト抽出
@@ -197,7 +192,7 @@ def generate_answer_ui(query: str, storage_path: str = "storage/chroma",
             page = info['page']
             source = info['source']
             chunk_count = len(info['chunks'])
-            url = f"http://localhost:8503/{source}#page={page}"
+            url = f"{settings.storage.pdf_server_base_url}/{source}#page={page}"
             text = f"📄 ページ {page} ({source}) - {chunk_count}件"
             # タプル: (page, source, url, text, chunks_preview)
             # chunksもタプルに変換（Streamlitのセッション状態に対応）
@@ -363,10 +358,10 @@ def clear_database(storage_path: str = "storage/chroma") -> ClearDatabaseResult:
 **原因**: 別のプロセスがデータベースファイルを使用中です。
 
 **解決方法**:
-すべてのターミナルで Ctrl+C を押してプロセスを停止してから、以下のコマンドを実行:
+以下のコマンドでコンテナを再起動してください:
 
-```powershell
-powershell -ExecutionPolicy Bypass -File .\\cleanup_and_restart.ps1
+```
+docker compose restart
 ```
 '''
         }
