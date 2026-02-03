@@ -1,4 +1,4 @@
-import os
+﻿import os
 import sys
 import chromadb
 from chromadb.utils import embedding_functions
@@ -19,6 +19,7 @@ from src.utils.logger import setup_logger
 from src.utils.error_handler import handle_errors, APIRetryHandler, get_user_friendly_error_message
 from src.types import ProcessResult, GenerateAnswerResult, DBStatus, MultiplePDFProcessResult, ClearDatabaseResult
 from src.config.settings import settings
+from src.utils.notebook_manager import NotebookManager
 
 load_dotenv()
 
@@ -30,7 +31,7 @@ retry_handler = APIRetryHandler(max_retries=3, backoff_factor=2.0)
 
 
 @handle_errors(logger)
-def process_uploaded_pdf(uploaded_file, raw_dir: str = "data/raw",
+def process_uploaded_pdf(uploaded_file, notebook_id: str = "default", raw_dir: str = "data/raw",
                         processed_dir: str = "data/processed",
                         storage_path: str = "storage/chroma") -> ProcessResult:
     """
@@ -82,10 +83,13 @@ def process_uploaded_pdf(uploaded_file, raw_dir: str = "data/raw",
         # 5. 埋め込みを保存（リトライ付き）
         logger.info("埋め込み生成を開始")
         def embed_with_retry():
-            return store_embeddings(processed_path, storage_path)
+            return store_embeddings(processed_path, storage_path, notebook_id=notebook_id)
 
         retry_handler.execute(embed_with_retry)
         logger.info("埋め込み生成完了")
+
+        notebook_mgr = NotebookManager()
+        notebook_mgr.add_source(notebook_id, uploaded_file.name, chunks_count, file_size_mb)
 
         return {
             'success': True,
@@ -106,7 +110,7 @@ def process_uploaded_pdf(uploaded_file, raw_dir: str = "data/raw",
 
 
 @handle_errors(logger)
-def generate_answer_ui(query: str, storage_path: str = "storage/chroma",
+def generate_answer_ui(query: str, notebook_id: str = "default", storage_path: str = "storage/chroma",
                       n_results: int = 3, initial_k: int = 100, final_k: int = 20) -> GenerateAnswerResult:
     """
     RAGパイプラインでクエリに対する回答を生成（UI用）
@@ -136,7 +140,7 @@ def generate_answer_ui(query: str, storage_path: str = "storage/chroma",
 
         # 1. ベクトル検索 (Retrieval) - 広めに取得
         logger.info(f"ベクトル検索開始: 初期取得{initial_k}件")
-        initial_results = semantic_search(query, storage_path, top_k=initial_k)
+        initial_results = semantic_search(query, storage_path, top_k=initial_k, notebook_id=notebook_id)
         logger.info(f"ベクトル検索完了: {len(initial_results)}件のチャンクを取得")
 
         # 2. LLMリランキング
@@ -193,7 +197,7 @@ def generate_answer_ui(query: str, storage_path: str = "storage/chroma",
             source = info['source']
             chunk_count = len(info['chunks'])
             url = f"{settings.storage.pdf_server_base_url}/{source}#page={page}"
-            text = f"📄 ページ {page} ({source}) - {chunk_count}件"
+            text = f"Page {page} ({source}) - {chunk_count} chunks"
             # タプル: (page, source, url, text, chunks_preview)
             # chunksもタプルに変換（Streamlitのセッション状態に対応）
             sources.append((page, source, url, text, tuple(info['chunks'])))
@@ -255,7 +259,7 @@ def format_sources(sources: List[str]) -> str:
     if not sources:
         return "ソースなし"
 
-    return "\n".join([f"• {source}" for source in sources])
+    return "\n".join([f"? {source}" for source in sources])
 
 
 def clear_chat_history(session_state) -> None:
@@ -342,7 +346,7 @@ def clear_database(storage_path: str = "storage/chroma") -> ClearDatabaseResult:
             logger.info("データベースをクリアしました")
             return {
                 'success': True,
-                'message': '✅ データベースをクリアしました。ページをリロード（F5）してから、PDFを再アップロードしてください。'
+                'message': '? データベースをクリアしました。ページをリロード（F5）してから、PDFを再アップロードしてください。'
             }
         else:
             return {
@@ -353,7 +357,7 @@ def clear_database(storage_path: str = "storage/chroma") -> ClearDatabaseResult:
         logger.error(f"データベースクリアエラー（ファイルロック）: {e}")
         return {
             'success': False,
-            'message': '''⚠️ データベースのクリアに失敗しました
+            'message': '''Database clear failed
 
 **原因**: 別のプロセスがデータベースファイルを使用中です。
 
@@ -373,7 +377,7 @@ docker compose restart
         }
 
 
-def process_multiple_pdfs(uploaded_files: List, raw_dir: str = "data/raw",
+def process_multiple_pdfs(uploaded_files: List, notebook_id: str = "default", raw_dir: str = "data/raw",
                          processed_dir: str = "data/processed",
                          storage_path: str = "storage/chroma") -> MultiplePDFProcessResult:
     """
@@ -389,7 +393,7 @@ def process_multiple_pdfs(uploaded_files: List, raw_dir: str = "data/raw",
     failed_files = []
 
     for uploaded_file in uploaded_files:
-        result = process_uploaded_pdf(uploaded_file, raw_dir, processed_dir, storage_path)
+        result = process_uploaded_pdf(uploaded_file, notebook_id, raw_dir, processed_dir, storage_path)
         results.append({
             'filename': uploaded_file.name,
             'success': result['success'],
@@ -430,3 +434,68 @@ def get_processed_pdfs(raw_dir: str = "data/raw") -> List[str]:
 
     pdf_files = [f for f in os.listdir(raw_dir) if f.endswith('.pdf')]
     return sorted(pdf_files)
+
+
+def delete_source_from_notebook(notebook_id: str, filename: str) -> Dict:
+    """Delete a source from a notebook and remove matching vectors."""
+    messages = []
+    try:
+        api_key = os.getenv("GOOGLE_API_KEY")
+        if api_key:
+            client = chromadb.PersistentClient(path=settings.storage.chroma_path)
+            gemini_ef = embedding_functions.GoogleGenerativeAiEmbeddingFunction(
+                api_key=api_key,
+                model_name=settings.embedding.model,
+                task_type=settings.embedding.task_type_document,
+            )
+            collection = client.get_collection(
+                name=settings.storage.collection_name,
+                embedding_function=gemini_ef,
+            )
+
+            results = collection.get(
+                where={
+                    "$and": [
+                        {"notebook_id": notebook_id},
+                        {"source": filename},
+                    ]
+                }
+            )
+            ids = results.get("ids", [])
+            if ids:
+                collection.delete(ids=ids)
+        else:
+            messages.append("API key not configured (skipped vector delete)")
+    except Exception as e:
+        messages.append(f"Vector delete failed: {e}")
+
+    # Always try to remove from metadata and files
+    notebook_mgr = NotebookManager()
+    removed = notebook_mgr.remove_source(notebook_id, filename)
+
+    raw_path = Path(settings.storage.data_raw_dir) / filename
+    processed_path = Path(settings.storage.data_processed_dir) / f"{Path(filename).stem}.json"
+    for target in (raw_path, processed_path):
+        try:
+            if target.exists():
+                target.unlink()
+        except Exception as e:
+            messages.append(f"File delete failed: {target} ({e})")
+
+    if removed:
+        msg = f"{filename} を削除しました"
+        if messages:
+            msg += " (" + "; ".join(messages) + ")"
+        return {"success": True, "message": msg}
+
+    msg = f"{filename} は見つかりませんでした"
+    if messages:
+        msg += " (" + "; ".join(messages) + ")"
+    return {"success": False, "message": msg}
+
+
+def get_notebook_sources_ui(notebook_id: str) -> List[Dict]:
+    """Return sources list for UI."""
+    notebook_mgr = NotebookManager()
+    return notebook_mgr.list_sources(notebook_id)
+
