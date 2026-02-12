@@ -64,6 +64,7 @@ def extract_text_from_pdf(pdf_path: str) -> List[Dict]:
 - **チャンクサイズ**: 500文字
 - **オーバーラップ**: 50文字（10%）
 - **理由**: 日本語の文脈を保持しつつ、コンテキストウィンドウ内に収める最適サイズ
+- **メタデータ**: 各チャンクに `page`（ページ番号）と `chunk_id`（チャンク番号）を保存
 - **実装**: [src/ingestion/chunking.py](src/ingestion/chunking.py)
 
 ```python
@@ -74,6 +75,17 @@ splitter = RecursiveCharacterTextSplitter(
     chunk_overlap=50,
     separators=["\n\n", "\n", "。", "、", " ", ""]
 )
+
+# 各チャンクにメタデータを付与
+chunks.append({
+    "content": text,
+    "metadata": {
+        "source": filename,
+        "page": page_num,      # ページ番号
+        "chunk_id": i,         # チャンク番号
+        "total_pages": total
+    }
+})
 ```
 
 #### 3. 埋め込み（Embedding）
@@ -255,8 +267,21 @@ class ChatHistoryManager:
 - ユーザーが根拠を確認可能
 - **信頼性の向上**: ハルシネーション（幻覚）の検証が容易
 
+**メタデータ構造:**
 ```python
-# app.py - UI実装
+# 各チャンクに保存されるメタデータ
+metadata = {
+    "source": "sample.pdf",      # ファイル名
+    "page": 3,                   # ページ番号
+    "chunk_id": 5,               # チャンク番号
+    "total_pages": 50,           # 総ページ数
+    "notebook_id": "default"     # ノートブックID
+}
+```
+
+**UI実装:**
+```python
+# app.py - ソース表示の実装
 with st.expander("📚 参照ソース"):
     for source in response['sources']:
         page, src_file, url, text, chunks = source
